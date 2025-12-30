@@ -2,39 +2,63 @@ import axios from 'axios';
 import { API_URL } from '../constants';
 import { CheckoutRequest, AuthResponse, Rate, TV, Order } from '../types';
 
+// Google Apps Script usually runs on a single endpoint
+// We will route requests by adding a ?route= parameter
 const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'text/plain;charset=utf-8', // GAS prefers text/plain to avoid preflight issues in some browser configs
   },
 });
 
-// Interceptor for Admin JWT
+// Interceptor to handle "Single Endpoint" routing
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('admin_token');
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // If the user hasn't set the API URL yet, don't break, just let it fail naturally or use mock
+  if (!API_URL || API_URL.includes('localhost')) {
+      // Keep standard behavior for localhost mocking
+      return config;
   }
+
+  // Convert standard REST path (e.g., /admin/all-tvs) to Query Param (e.g., ?route=/admin/all-tvs)
+  if (config.url && config.url.startsWith('/')) {
+    const route = config.url;
+    config.url = ''; // Base URL only
+    config.params = { ...config.params, route: route };
+  }
+  
+  // For GAS, POST data is often better sent as stringified JSON in the body 
+  // if Content-Type is text/plain to bypass complex CORS
+  if (config.method === 'post' || config.method === 'put') {
+     if (typeof config.data === 'object') {
+         config.data = JSON.stringify(config.data);
+     }
+  }
+
   return config;
 });
 
 // Helper to simulate backend response if server is offline (Network Error)
 const handleApiCall = async <T>(apiCall: () => Promise<any>, mockData?: T): Promise<{ data: T }> => {
   try {
-    return await apiCall();
+    const response = await apiCall();
+    // GAS sometimes returns 200 even if script failed, check for data.error
+    if (response.data && response.data.error) {
+        throw new Error(response.data.error);
+    }
+    return response;
   } catch (error: any) {
     // Check if we should use fallback data
-    // !error.response implies the server did not respond (Network Error, CORS, Offline)
-    // Also handle 404 (Endpoint not found) and 5xx (Server Error) to fallback to mock data
     const status = error.response?.status;
-    const shouldMock = !error.response || 
+    const shouldMock = !API_URL || 
+                       API_URL === '' ||
+                       !error.response || 
                        error.code === 'ERR_NETWORK' || 
                        error.message === 'Network Error' ||
                        status === 404 || 
                        status >= 500;
 
     if (mockData && shouldMock) {
-      console.warn(`API Error (${status || error.code}). Using mock data.`, error);
+      console.warn(`API Error or No URL configured. Using mock data for: ${error.config?.params?.route || error.config?.url}`);
       return new Promise((resolve) => setTimeout(() => resolve({ data: mockData }), 800));
     }
     throw error;
@@ -45,7 +69,7 @@ export const PublicService = {
   createCheckoutSession: async (data: CheckoutRequest) => {
     return handleApiCall(
       () => api.post<{ checkoutUrl: string }>('/public/create-checkout-session', data),
-      { checkoutUrl: 'https://checkout.stripe.com/c/pay/demo_session' } // Mock URL
+      { checkoutUrl: 'https://checkout.stripe.com/c/pay/demo_session' } 
     );
   },
   changeRoom: async (data: { orderId: string; otp: string; newTvNumber: string }) => {
@@ -55,8 +79,9 @@ export const PublicService = {
     );
   },
   checkTvStatus: async (tvNumber: string) => {
+    // Pass tvNumber as query param for GET request
     return handleApiCall(
-      () => api.get<{ connected: boolean; location: string }>(`/public/tv-status/${tvNumber}`),
+      () => api.get<{ connected: boolean; location: string }>('/public/tv-status', { params: { tvNumber } }),
       { connected: true, location: 'Demo Room' }
     );
   }
@@ -74,7 +99,7 @@ export const AdminService = {
   },
   getAllOrders: async (page = 1, limit = 20) => {
     return handleApiCall(
-        () => api.get<{ orders: Order[]; total: number }>(`/admin/all-orders?page=${page}&limit=${limit}`),
+        () => api.get<{ orders: Order[]; total: number }>('/admin/all-orders', { params: { page, limit } }),
         { orders: [], total: 0 }
     );
   },
@@ -88,10 +113,10 @@ export const AdminService = {
     return api.post('/admin/add-tv', data);
   },
   toggleTV: async (tvNumber: string, newState: 'on' | 'off') => {
-    return api.put('/admin/toggle-tv', { tvNumber, newState });
+    return api.post('/admin/toggle-tv', { tvNumber, newState });
   },
   removeTV: async (tvNumber: string) => {
-    return api.delete('/admin/remove-tv', { data: { tvNumber } });
+    return api.post('/admin/remove-tv', { tvNumber });
   },
   updateThresholds: async (thresholds: Rate[]) => {
     return api.post('/admin/change-thresholds', { thresholds });

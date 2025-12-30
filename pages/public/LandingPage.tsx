@@ -30,29 +30,36 @@ export const LandingPage: React.FC = () => {
     setToast({ show: true, message, type });
   };
 
-  // Simulate TV check debounce
+  // Check TV Status via API
   useEffect(() => {
     if (tvNumber.length === 4) {
       setCheckingTv(true);
-      // In a real scenario, we'd hit the API. Mocking success for demo.
       const timer = setTimeout(async () => {
         try {
-            // Uncomment to use real API check if available
-            // const { data } = await PublicService.checkTvStatus(tvNumber);
-            // if(data.connected) { ... }
-            
-            setIsTvValid(true);
-            setLocation("Room 101 - Main Wing");
+            const { data } = await PublicService.checkTvStatus(tvNumber);
+            if(data.connected) {
+                setIsTvValid(true);
+                setLocation(data.location || "Unknown Location");
+            } else {
+                setIsTvValid(false);
+                setLocation('');
+                // Only show toast if explicitly invalid response logic requires it, 
+                // but usually silent fail on input is better UX until submission, 
+                // however visual indicator (red border/text) is managed by isTvValid state in UI
+            }
         } catch (error) {
             setIsTvValid(false);
+            setLocation('');
+            showToast('Connection to TV failed. Please try again.', 'error');
         } finally {
             setCheckingTv(false);
         }
-      }, 1000);
+      }, 800);
       return () => clearTimeout(timer);
     } else {
       setIsTvValid(null);
       setLocation('');
+      setSelectedDays(null);
     }
   }, [tvNumber]);
 
@@ -141,7 +148,9 @@ export const LandingPage: React.FC = () => {
                   maxLength={4}
                   value={tvNumber}
                   onChange={(e) => setTvNumber(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-indigo-500 transition-colors text-lg tracking-widest placeholder-gray-600"
+                  className={`w-full bg-white/5 border rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none transition-colors text-lg tracking-widest placeholder-gray-600 ${
+                    isTvValid === false ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-indigo-500'
+                  }`}
                   placeholder="0000"
                 />
                 {checkingTv && (
@@ -153,6 +162,11 @@ export const LandingPage: React.FC = () => {
                   <MapPin className="w-3 h-3" />
                   <span>{location}</span>
                 </div>
+              )}
+              {isTvValid === false && !checkingTv && (
+                 <div className="flex items-center gap-2 mt-2 text-sm text-red-400 animate-fade-in">
+                  <span>{t('error_tv_not_found')}</span>
+                 </div>
               )}
             </div>
 

@@ -244,7 +244,7 @@ export const LandingPage: React.FC = () => {
         <LanguageSelector />
         
         <div className="text-center mt-8 opacity-30 text-xs">
-            Admin Access? <a href="/admin" className="hover:text-white">Click here</a>
+            Admin Access? <button onClick={() => navigate('/admin')} className="hover:text-white underline bg-transparent border-none cursor-pointer">Click here</button>
         </div>
         
         {/* Toast Notification */}

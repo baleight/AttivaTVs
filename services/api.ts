@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '../constants';
-import { CheckoutRequest, AuthResponse, Rate, TV, Order } from '../types';
+import { CheckoutRequest, AuthResponse, Rate, TV, Order, AgendaEvent } from '../types';
 
 // Google Apps Script usually runs on a single endpoint
 // We will route requests by adding a ?route= parameter
@@ -118,7 +118,23 @@ export const AdminService = {
   removeTV: async (tvNumber: string) => {
     return api.post('/admin/remove-tv', { tvNumber });
   },
+  updateTVLocation: async (tvNumber: string, location: string) => {
+    return api.post('/admin/update-tv', { tvNumber, location });
+  },
   updateThresholds: async (thresholds: Rate[]) => {
     return api.post('/admin/change-thresholds', { thresholds });
+  },
+  // Agenda Methods
+  getAgenda: async () => {
+    return handleApiCall(
+        () => api.get<{ events: AgendaEvent[] }>('/admin/agenda/all'),
+        { events: [] }
+    );
+  },
+  addAgendaEvent: async (event: Partial<AgendaEvent>) => {
+    return api.post('/admin/agenda/add', event);
+  },
+  deleteAgendaEvent: async (id: string) => {
+    return api.post('/admin/agenda/delete', { id });
   }
 };

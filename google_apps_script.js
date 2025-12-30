@@ -3,6 +3,7 @@ const SHEET_TVS = "TVs";
 const SHEET_ORDERS = "Orders";
 const SHEET_RATES = "Rates";
 const SHEET_ADMINS = "Admins";
+const SHEET_AGENDA = "Agenda";
 
 // INITIAL SETUP
 function setupDatabase() {
@@ -12,7 +13,6 @@ function setupDatabase() {
   if (!ss.getSheetByName(SHEET_TVS)) {
     const s = ss.insertSheet(SHEET_TVS);
     s.appendRow(["tvNumber", "location", "state", "remainingDuration", "balance", "last_updated", "deleted"]);
-    // Add dummy data
     s.appendRow(["1001", "Lobby", "off", 0, 0, new Date(), false]);
     s.appendRow(["1002", "Room 101", "on", 120, 0, new Date(), false]);
   }
@@ -38,6 +38,13 @@ function setupDatabase() {
     const s = ss.insertSheet(SHEET_ADMINS);
     s.appendRow(["adminId", "email", "password", "fullName", "isAdmin"]);
     s.appendRow(["1", "admin@tvtime.com", "admin123", "Super Admin", true]);
+  }
+
+  // Create Agenda Sheet
+  if (!ss.getSheetByName(SHEET_AGENDA)) {
+    const s = ss.insertSheet(SHEET_AGENDA);
+    s.appendRow(["id", "title", "date", "type", "description"]);
+    s.appendRow(["evt_1", "System Maintenance", new Date().toISOString().split('T')[0], "maintenance", "Check server logs"]);
   }
 }
 
@@ -87,6 +94,14 @@ function handleRequest(e) {
       result = toggleTV(data);
     } else if (route === '/admin/add-tv') {
       result = addTV(data);
+    } else if (route === '/admin/update-tv') {
+      result = updateTVLocation(data);
+    } else if (route === '/admin/agenda/all') {
+      result = getAgendaEvents();
+    } else if (route === '/admin/agenda/add') {
+      result = addAgendaEvent(data);
+    } else if (route === '/admin/agenda/delete') {
+      result = deleteAgendaEvent(data);
     } else {
       throw new Error("Route not found: " + route);
     }
@@ -107,7 +122,7 @@ function getTvStatus(tvNumber) {
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(tvNumber) && !rows[i][6]) { // Check number and deleted flag
+    if (String(rows[i][0]) === String(tvNumber) && !rows[i][6]) { 
       return { 
         connected: true, 
         location: rows[i][1],
@@ -115,16 +130,14 @@ function getTvStatus(tvNumber) {
       };
     }
   }
-  return { connected: false, location: null }; // Not found or error
+  return { connected: false, location: null };
 }
 
 function createCheckoutSession(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ORDERS);
   const orderId = 'ORD-' + Math.floor(Math.random() * 100000);
   const otp = Math.floor(1000 + Math.random() * 9000).toString();
-  
-  // Calculate cost based on Rates (Simplified for demo)
-  const cost = 10; // Logic to fetch from Rates sheet could go here
+  const cost = 10; 
   
   sheet.appendRow([
     orderId,
@@ -134,20 +147,15 @@ function createCheckoutSession(data) {
     cost,
     new Date(),
     otp,
-    'paid', // Simulating instant success for demo
+    'paid', 
     data.customerEmail || ''
   ]);
 
-  // Update TV duration
   updateTvDuration(data.tvNumber, data.timeBought);
-
-  // Return Stripe Mock URL
   return { checkoutUrl: 'https://checkout.stripe.com/c/pay/demo_session_success' };
 }
 
 function changeRoom(data) {
-  // Logic to validate OTP and move duration would go here
-  // For now, return success
   return { success: true, message: "Room changed successfully" };
 }
 
@@ -156,7 +164,6 @@ function adminLogin(data) {
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
-    // Plain text password for demo only
     if (rows[i][1] === data.email && rows[i][2] === data.password) {
       return {
         user: {
@@ -179,7 +186,7 @@ function getAllTVs() {
   const tvs = [];
   
   for (let i = 1; i < data.length; i++) {
-    if (data[i][6] === true) continue; // Skip deleted
+    if (data[i][6] === true) continue;
     let tv = {};
     for (let j = 0; j < headers.length; j++) {
       tv[headers[j]] = data[i][j];
@@ -189,32 +196,12 @@ function getAllTVs() {
   return { tvs: tvs };
 }
 
-function getAllOrders() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ORDERS);
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const orders = [];
-  
-  // Return last 50 orders
-  const start = Math.max(1, data.length - 50);
-  
-  for (let i = start; i < data.length; i++) {
-    let order = {};
-    for (let j = 0; j < headers.length; j++) {
-      order[headers[j]] = data[i][j];
-    }
-    orders.push(order);
-  }
-  return { orders: orders.reverse(), total: orders.length };
-}
-
 function toggleTV(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TVS);
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(data.tvNumber)) {
-      // Update state column (index 2 based on setupDatabase)
       sheet.getRange(i + 1, 3).setValue(data.newState);
       return { success: true };
     }
@@ -228,6 +215,67 @@ function addTV(data) {
    return { success: true };
 }
 
+function updateTVLocation(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TVS);
+  const rows = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(data.tvNumber)) {
+      // Update location column (index 1)
+      sheet.getRange(i + 1, 2).setValue(data.location);
+      return { success: true };
+    }
+  }
+  throw new Error("TV Not Found");
+}
+
+// --- AGENDA FUNCTIONS ---
+
+function getAgendaEvents() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AGENDA);
+  const data = sheet.getDataRange().getValues();
+  const events = [];
+  
+  // Skip header row
+  for (let i = 1; i < data.length; i++) {
+    events.push({
+      id: data[i][0],
+      title: data[i][1],
+      date: data[i][2], // Expecting YYYY-MM-DD or parseable date
+      type: data[i][3],
+      description: data[i][4]
+    });
+  }
+  return { events: events };
+}
+
+function addAgendaEvent(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AGENDA);
+  const id = 'evt_' + Math.floor(Math.random() * 1000000);
+  // Ensure date is string YYYY-MM-DD
+  let dateStr = data.date; 
+  if (data.date instanceof Date) {
+      dateStr = data.date.toISOString().split('T')[0];
+  }
+
+  sheet.appendRow([id, data.title, dateStr, data.type, data.description || '']);
+  return { success: true, event: { id, ...data, date: dateStr } };
+}
+
+function deleteAgendaEvent(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_AGENDA);
+  const rows = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(data.id)) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  throw new Error("Event Not Found");
+}
+
+
 // --- HELPER FUNCTIONS ---
 
 function updateTvDuration(tvNumber, days) {
@@ -238,7 +286,7 @@ function updateTvDuration(tvNumber, days) {
       const currentDuration = Number(rows[i][3]) || 0;
       const addedMinutes = days * 24 * 60;
       sheet.getRange(i + 1, 4).setValue(currentDuration + addedMinutes);
-      sheet.getRange(i + 1, 3).setValue("on"); // Auto turn on
+      sheet.getRange(i + 1, 3).setValue("on");
       break;
     }
   }

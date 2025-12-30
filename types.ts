@@ -20,6 +20,14 @@ export interface Order {
   customerEmail?: string;
 }
 
+export interface AgendaEvent {
+  id: string;
+  title: string;
+  date: string; // ISO Date string YYYY-MM-DD
+  type: 'manual' | 'expiry' | 'maintenance';
+  description?: string;
+}
+
 export interface Rate {
   days: number;
   price: number;

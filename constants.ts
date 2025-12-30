@@ -11,8 +11,9 @@ const getEnvVar = (key: string, fallback: string): string => {
 };
 
 // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE IN .env (VITE_API_URL)
-// OR REPLACE THE EMPTY STRING BELOW
-export const API_URL = getEnvVar('VITE_API_URL', ''); 
+// OR REPLACE THE STRING BELOW WITH YOUR LINK
+// Example: 'https://script.google.com/macros/s/AKfycbx.../exec'
+export const API_URL = getEnvVar('VITE_API_URL', 'https://script.google.com/macros/s/AKfycbxxORUeaf0pYrSS4wVgIU4mrl-ZGOGmrLvwAMun8So2fQOiBguMba3uEato6Nrgzhl_oQ/exec'); 
 
 // WebSocket is not supported by standard Google Apps Script
 // We will use polling in the dashboard if WS is empty

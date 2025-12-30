@@ -2,35 +2,49 @@ import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { WS_URL } from '../../constants';
 import { AdminService } from '../../services/api';
-import { TV, Order } from '../../types';
-import { LogOut, Monitor, List, Settings, Plus, Power, Trash2 } from 'lucide-react';
+import { TV, Order, AgendaEvent } from '../../types';
+import { LogOut, Monitor, List, Settings, Plus, Power, Trash2, Calendar as CalendarIcon, Edit2, Check, X } from 'lucide-react';
 import { GlassCard } from '../../components/GlassCard';
+import { CalendarView } from '../../components/CalendarView';
 
 export const AdminDashboard: React.FC = () => {
-  const { logout, tvs, setTVs, updateTV, orders, setOrders } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'tvs' | 'orders' | 'rates'>('tvs');
+  const { 
+    logout, 
+    tvs, setTVs, updateTV, 
+    orders, setOrders,
+    events, setEvents, addEvent, removeEvent 
+  } = useAppStore();
+  const [activeTab, setActiveTab] = useState<'tvs' | 'orders' | 'rates' | 'agenda'>('tvs');
   const [wsConnected, setWsConnected] = useState(false);
+  
+  // Edit State
+  const [editingTv, setEditingTv] = useState<string | null>(null);
+  const [editLocationValue, setEditLocationValue] = useState('');
 
   // Initial Data Fetch
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [tvRes, orderRes] = await Promise.all([
+        const [tvRes, orderRes, agendaRes] = await Promise.all([
           AdminService.getAllTVs(),
-          AdminService.getAllOrders()
+          AdminService.getAllOrders(),
+          AdminService.getAgenda()
         ]);
         setTVs(tvRes.data.tvs);
         setOrders(orderRes.data.orders);
+        setEvents(agendaRes.data.events);
       } catch (e) {
         console.error("Failed to load admin data", e);
       }
     };
     fetchData();
-  }, [setTVs, setOrders]);
+  }, [setTVs, setOrders, setEvents]);
 
   // WebSocket Connection
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
+    if (!WS_URL) return; // Skip if not configured
+    
     const ws = new WebSocket(`${WS_URL}/ws/admin?token=${token}`);
 
     ws.onopen = () => setWsConnected(true);
@@ -39,10 +53,8 @@ export const AdminDashboard: React.FC = () => {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'tv-status-update') {
-        // Assume data.tv is the updated TV object
         updateTV(data.tv); 
       } else if (data.type === 'order-created') {
-        // Refetch or append locally
         AdminService.getAllOrders().then(res => setOrders(res.data.orders));
       }
     };
@@ -53,13 +65,79 @@ export const AdminDashboard: React.FC = () => {
   const handleToggleTV = async (tv: TV) => {
     const newState = tv.state === 'on' ? 'off' : 'on';
     try {
-      // Optimistic update
       updateTV({ ...tv, state: newState });
       await AdminService.toggleTV(tv.tvNumber, newState);
     } catch (error) {
-      updateTV(tv); // Revert
+      updateTV(tv);
       alert("Failed to toggle TV. Device might be offline.");
     }
+  };
+
+  const handleAddAgendaEvent = async (eventData: Partial<AgendaEvent>) => {
+    try {
+      const { data } = await AdminService.addAgendaEvent(eventData);
+      if (data.event) {
+          // @ts-ignore - Backend returns strict type, UI handles optional
+          addEvent(data.event);
+      }
+    } catch (error) {
+      alert("Failed to add event");
+    }
+  };
+
+  const handleDeleteAgendaEvent = async (id: string) => {
+    try {
+      await AdminService.deleteAgendaEvent(id);
+      removeEvent(id);
+    } catch (error) {
+      alert("Failed to delete event");
+    }
+  };
+  
+  // Editing Logic
+  const startEditing = (tv: TV) => {
+    setEditingTv(tv.tvNumber);
+    setEditLocationValue(tv.location);
+  };
+
+  const cancelEditing = () => {
+    setEditingTv(null);
+    setEditLocationValue('');
+  };
+
+  const saveLocation = async (tvNumber: string) => {
+    if (!editLocationValue.trim()) return;
+    try {
+      // Optimistic update
+      const tvToUpdate = tvs.find(t => t.tvNumber === tvNumber);
+      if (tvToUpdate) {
+          updateTV({ ...tvToUpdate, location: editLocationValue });
+      }
+      setEditingTv(null);
+      await AdminService.updateTVLocation(tvNumber, editLocationValue);
+    } catch (error) {
+      alert("Failed to update location");
+    }
+  };
+
+  // Combine Manual Events with Dynamic TV Expirations
+  const getCombinedEvents = () => {
+    const dynamicEvents: AgendaEvent[] = tvs
+      .filter(tv => tv.remainingDuration > 0 && tv.state === 'on')
+      .map(tv => {
+        // Calculate expiry date
+        const now = new Date();
+        const expiryDate = new Date(now.getTime() + tv.remainingDuration * 60000);
+        return {
+          id: `expiry-${tv.tvNumber}`,
+          title: `TV ${tv.tvNumber} Expires`,
+          date: expiryDate.toISOString(),
+          type: 'expiry' as const,
+          description: `Location: ${tv.location}`
+        };
+      });
+
+    return [...events, ...dynamicEvents];
   };
 
   return (
@@ -68,8 +146,8 @@ export const AdminDashboard: React.FC = () => {
       <header className="h-16 border-b border-white/10 bg-black/20 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <h1 className="font-heading font-bold text-xl">Admin Console</h1>
-          <div className={`text-xs px-2 py-0.5 rounded-full border ${wsConnected ? 'border-green-500/50 text-green-400 bg-green-500/10' : 'border-red-500/50 text-red-400 bg-red-500/10'}`}>
-            {wsConnected ? 'System Live' : 'Connecting...'}
+          <div className={`text-xs px-2 py-0.5 rounded-full border ${wsConnected ? 'border-green-500/50 text-green-400 bg-green-500/10' : 'border-gray-500/50 text-gray-400 bg-gray-500/10'}`}>
+            {wsConnected ? 'System Live' : 'Polling Mode'}
           </div>
         </div>
         <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition">
@@ -78,16 +156,17 @@ export const AdminDashboard: React.FC = () => {
       </header>
 
       {/* Tabs */}
-      <div className="flex justify-center gap-4 py-6">
+      <div className="flex justify-center gap-4 py-6 overflow-x-auto px-4">
         {[
           { id: 'tvs', label: 'TVs', icon: Monitor },
           { id: 'orders', label: 'Orders', icon: List },
+          { id: 'agenda', label: 'Agenda', icon: CalendarIcon },
           { id: 'rates', label: 'Configuration', icon: Settings },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all ${
+            className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all whitespace-nowrap ${
               activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:bg-white/10'
             }`}
           >
@@ -112,11 +191,37 @@ export const AdminDashboard: React.FC = () => {
               {tvs.map((tv) => (
                 <GlassCard key={tv.tvNumber} className="relative group hover:border-indigo-500/30 transition-colors">
                   <div className="flex justify-between items-start mb-4">
-                    <div>
+                    <div className="flex-1 mr-4">
                       <h3 className="text-2xl font-bold font-heading">{tv.tvNumber}</h3>
-                      <p className="text-sm text-gray-400">{tv.location}</p>
+                      
+                      {editingTv === tv.tvNumber ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <input 
+                            className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-indigo-500 text-white"
+                            value={editLocationValue}
+                            onChange={(e) => setEditLocationValue(e.target.value)}
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveLocation(tv.tvNumber);
+                                if (e.key === 'Escape') cancelEditing();
+                            }}
+                          />
+                          <button onClick={() => saveLocation(tv.tvNumber)} className="text-green-400 hover:text-green-300 p-1"><Check size={16} /></button>
+                          <button onClick={cancelEditing} className="text-red-400 hover:text-red-300 p-1"><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 group/edit h-8">
+                          <p className="text-sm text-gray-400 truncate max-w-[150px]" title={tv.location}>{tv.location}</p>
+                          <button 
+                            onClick={() => startEditing(tv)}
+                            className="opacity-0 group-hover/edit:opacity-100 text-gray-500 hover:text-indigo-400 transition-opacity p-1"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className={`w-3 h-3 rounded-full shadow-[0_0_8px] ${tv.state === 'on' ? 'bg-green-500 shadow-green-500' : 'bg-red-500 shadow-red-500'}`} />
+                    <div className={`w-3 h-3 rounded-full shadow-[0_0_8px] shrink-0 ${tv.state === 'on' ? 'bg-green-500 shadow-green-500' : 'bg-red-500 shadow-red-500'}`} />
                   </div>
                   
                   <div className="space-y-2 mb-6">
@@ -181,12 +286,19 @@ export const AdminDashboard: React.FC = () => {
             </table>
           </GlassCard>
         )}
+
+        {activeTab === 'agenda' && (
+           <CalendarView 
+              events={getCombinedEvents()} 
+              onAddEvent={handleAddAgendaEvent}
+              onDeleteEvent={handleDeleteAgendaEvent}
+           />
+        )}
         
         {activeTab === 'rates' && (
           <GlassCard>
             <h3 className="text-xl font-bold mb-4">Pricing Configuration</h3>
             <p className="text-gray-400 text-sm mb-6">Modify the Google Sheets "Rates" configuration directly via this interface.</p>
-            {/* Rates form would go here */}
             <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-200 text-sm">
               Note: Updating rates here will immediately reflect for all new guest users.
             </div>

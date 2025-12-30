@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AdminUser, TV, Order, Rate } from '../types';
+import { AdminUser, TV, Order, Rate, AgendaEvent } from '../types';
 
 interface AppState {
   // Admin State
@@ -11,12 +11,16 @@ interface AppState {
   tvs: TV[];
   orders: Order[];
   rates: Rate[];
+  events: AgendaEvent[];
   
   setTVs: (tvs: TV[]) => void;
   updateTV: (tv: TV) => void;
   setOrders: (orders: Order[]) => void;
   addOrder: (order: Order) => void;
   setRates: (rates: Rate[]) => void;
+  setEvents: (events: AgendaEvent[]) => void;
+  addEvent: (event: AgendaEvent) => void;
+  removeEvent: (id: string) => void;
   
   // UI State
   isLoading: boolean;
@@ -37,6 +41,7 @@ export const useAppStore = create<AppState>((set) => ({
   tvs: [],
   orders: [],
   rates: [],
+  events: [],
   
   setTVs: (tvs) => set({ tvs }),
   updateTV: (updatedTv) => set((state) => ({
@@ -45,6 +50,9 @@ export const useAppStore = create<AppState>((set) => ({
   setOrders: (orders) => set({ orders }),
   addOrder: (order) => set((state) => ({ orders: [order, ...state.orders] })),
   setRates: (rates) => set({ rates }),
+  setEvents: (events) => set({ events }),
+  addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
+  removeEvent: (id) => set((state) => ({ events: state.events.filter(e => e.id !== id) })),
   
   isLoading: false,
   setLoading: (isLoading) => set({ isLoading }),

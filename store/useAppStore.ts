@@ -14,7 +14,9 @@ interface AppState {
   events: AgendaEvent[];
   
   setTVs: (tvs: TV[]) => void;
+  addTV: (tv: TV) => void;
   updateTV: (tv: TV) => void;
+  updateTVStatus: (tvNumber: string, status: Partial<TV>) => void;
   setOrders: (orders: Order[]) => void;
   addOrder: (order: Order) => void;
   setRates: (rates: Rate[]) => void;
@@ -44,8 +46,12 @@ export const useAppStore = create<AppState>((set) => ({
   events: [],
   
   setTVs: (tvs) => set({ tvs }),
+  addTV: (tv) => set((state) => ({ tvs: [...state.tvs, tv] })),
   updateTV: (updatedTv) => set((state) => ({
     tvs: state.tvs.map((tv) => tv.tvNumber === updatedTv.tvNumber ? updatedTv : tv)
+  })),
+  updateTVStatus: (tvNumber, status) => set((state) => ({
+    tvs: state.tvs.map((tv) => tv.tvNumber === tvNumber ? { ...tv, ...status } : tv)
   })),
   setOrders: (orders) => set({ orders }),
   addOrder: (order) => set((state) => ({ orders: [order, ...state.orders] })),

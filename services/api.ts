@@ -110,7 +110,10 @@ export const AdminService = {
     );
   },
   addTV: async (data: { tvNumber: string; location: string }) => {
-    return api.post('/admin/add-tv', data);
+    return handleApiCall(
+        () => api.post('/admin/add-tv', data),
+        { success: true }
+    );
   },
   toggleTV: async (tvNumber: string, newState: 'on' | 'off') => {
     return api.post('/admin/toggle-tv', { tvNumber, newState });

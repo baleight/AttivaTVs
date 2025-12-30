@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Tv, CreditCard, RefreshCw, Mail, MapPin } from 'lucide-react';
 import { GlassCard } from '../../components/GlassCard';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import { PublicService } from '../../services/api';
-import { DEFAULT_RATES } from '../../constants';
+import { DEFAULT_RATES, WS_URL } from '../../constants';
 import { Toast, ToastType } from '../../components/Toast';
 
 export const LandingPage: React.FC = () => {
@@ -43,9 +43,6 @@ export const LandingPage: React.FC = () => {
             } else {
                 setIsTvValid(false);
                 setLocation('');
-                // Only show toast if explicitly invalid response logic requires it, 
-                // but usually silent fail on input is better UX until submission, 
-                // however visual indicator (red border/text) is managed by isTvValid state in UI
             }
         } catch (error) {
             setIsTvValid(false);
@@ -63,9 +60,40 @@ export const LandingPage: React.FC = () => {
     }
   }, [tvNumber]);
 
+  // Connect to WebSocket to simulate "Device Online" status when TV is valid
+  useEffect(() => {
+    if (isTvValid && tvNumber && WS_URL) {
+      // Connect as device
+      const ws = new WebSocket(`${WS_URL}/ws/device?tvNumber=${tvNumber}&location=${encodeURIComponent(location)}`);
+      
+      const interval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          // Send heartbeat
+          ws.send(JSON.stringify({ type: 'heartbeat', state: 'on' }));
+        }
+      }, 30000); // 30s heartbeat
+
+      return () => {
+        clearInterval(interval);
+        ws.close();
+      };
+    }
+  }, [isTvValid, tvNumber, location]);
+
   const handlePurchase = async () => {
-    if (!tvNumber || !selectedDays || !isTvValid) {
-        showToast(t('error_invalid_input') || "Please check your inputs.", 'error');
+    // Specific pre-validation checks
+    if (!tvNumber || tvNumber.length < 4) {
+        showToast(t('enter_tv'), 'error');
+        return;
+    }
+    
+    if (isTvValid === false) {
+        showToast(t('error_tv_not_found'), 'error');
+        return;
+    }
+
+    if (!selectedDays) {
+        showToast(t('select_plan') || "Please select a duration", 'error');
         return;
     }
 
@@ -89,7 +117,20 @@ export const LandingPage: React.FC = () => {
                   alert("Demo Mode: Payment Successful! (Simulated)\n\nIn a real environment, this would redirect to Stripe.");
               }, 500);
           } else {
-              window.location.href = response.data.checkoutUrl;
+              const url = response.data.checkoutUrl;
+              if (url.startsWith('http')) {
+                  try {
+                      // Attempt standard navigation
+                      window.location.href = url;
+                  } catch (e) {
+                      // Fallback for sandboxed environments where location.href is blocked
+                      console.warn("Direct navigation blocked, opening in new tab", e);
+                      window.open(url, '_blank');
+                  }
+              } else {
+                  console.error("Invalid checkout URL:", url);
+                  showToast("Payment Error: Invalid Redirect", 'error');
+              }
           }
       } else {
           throw new Error("Invalid response received from server");
@@ -99,24 +140,35 @@ export const LandingPage: React.FC = () => {
       let errorMessage = t('error_payment_failed') || "Payment initialization failed.";
 
       if (error.response) {
-        // Server responded with a status code
+        // Server responded with a status code (REST API approach)
         switch (error.response.status) {
             case 404:
-                errorMessage = t('error_tv_not_found') || "TV Not Found. Please verify the TV number.";
+                errorMessage = t('error_tv_not_found') || "TV Not Found.";
                 break;
             case 422: 
-                errorMessage = t('error_invalid_data') || "Invalid data provided. Please check your inputs.";
+                errorMessage = t('error_invalid_data') || "Invalid data.";
                 break;
             case 503:
-                errorMessage = t('error_device_offline') || "Device appears to be offline. Cannot activate remotely.";
+                errorMessage = t('error_device_offline') || "Device offline.";
                 break;
             default:
                 errorMessage = error.response.data?.message || errorMessage;
         }
       } else if (error.request) {
-        errorMessage = t('error_network') || "Network Error. Backend is unreachable.";
-      } else {
-        errorMessage = error.message;
+        // Request made but no response (Network issue)
+        errorMessage = t('error_network') || "Network Error.";
+      } else if (error.message) {
+        // Logical errors thrown manually or by api.ts (Google Apps Script approach)
+        const msg = error.message.toLowerCase();
+        if (msg.includes('not found') || msg.includes('tv number')) {
+             errorMessage = t('error_tv_not_found');
+        } else if (msg.includes('offline') || msg.includes('connect')) {
+             errorMessage = t('error_device_offline');
+        } else if (msg.includes('network') || msg.includes('fetch')) {
+             errorMessage = t('error_network');
+        } else {
+             errorMessage = error.message;
+        }
       }
 
       showToast(errorMessage, 'error');
@@ -244,7 +296,7 @@ export const LandingPage: React.FC = () => {
         <LanguageSelector />
         
         <div className="text-center mt-8 opacity-30 text-xs">
-            Admin Access? <button onClick={() => navigate('/admin')} className="hover:text-white underline bg-transparent border-none cursor-pointer">Click here</button>
+            Admin Access? <Link to="/admin" className="hover:text-white underline">Click here</Link>
         </div>
         
         {/* Toast Notification */}

@@ -6,6 +6,7 @@ export interface TV {
   balance: number;
   last_updated: string;
   deleted?: boolean;
+  connected?: boolean;
 }
 
 export interface Order {

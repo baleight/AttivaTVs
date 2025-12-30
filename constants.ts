@@ -1,27 +1,30 @@
 // Safely access environment variables with fallback
 const getEnvVar = (key: string, fallback: string): string => {
   try {
-    // @ts-ignore
-    const env = (import.meta as any).env;
-    return (env && env[key]) ? env[key] : fallback;
+    // Cast to any to avoid TypeScript errors regarding ImportMeta.env
+    const meta = import.meta as any;
+    // Check if meta and meta.env exist before accessing the key to prevent runtime errors
+    if (meta && meta.env && meta.env[key]) {
+      return String(meta.env[key]);
+    }
   } catch (e) {
-    // Return fallback if access fails
-    return fallback;
+    // Return fallback if access fails or import.meta is not defined
   }
+  return fallback;
 };
 
 // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE IN .env (VITE_API_URL)
 // OR REPLACE THE STRING BELOW WITH YOUR LINK
 // Example: 'https://script.google.com/macros/s/AKfycbx.../exec'
-export const API_URL = getEnvVar('VITE_API_URL', 'https://script.google.com/macros/s/AKfycbxxORUeaf0pYrSS4wVgIU4mrl-ZGOGmrLvwAMun8So2fQOiBguMba3uEato6Nrgzhl_oQ/exec'); 
+export const API_URL = getEnvVar('VITE_API_URL', 'https://script.google.com/macros/s/AKfycbyHbLg6DEhaStXsrpjEBYdr11HQF7ukEAxC1Z6TJnqg2ZIEsALyWEZOVU6n8lCBqEtRvg/exec'); 
 
-// WebSocket is not supported by standard Google Apps Script
-// We will use polling in the dashboard if WS is empty
-export const WS_URL = getEnvVar('VITE_WS_URL', '');
+// WebSocket Server URL
+// Defaults to localhost for the Node.js server we just created
+export const WS_URL = getEnvVar('VITE_WS_URL', 'ws://localhost:8080');
 
 export const LANGUAGES = [
-  { code: 'en', label: 'English', flag: '🇬🇧' },
   { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+  { code: 'en', label: 'English', flag: '🇬🇧' },
   { code: 'fr', label: 'Français', flag: '🇫🇷' },
   { code: 'es', label: 'Español', flag: '🇪🇸' },
   { code: 'ar', label: 'العربية', flag: '🇸🇦' },

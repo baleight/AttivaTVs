@@ -8,13 +8,14 @@ import { useAppStore } from './store/useAppStore';
 import './i18n';
 
 // Protected Route Wrapper
-const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const admin = useAppStore((state) => state.admin);
   const token = localStorage.getItem('admin_token');
   
   if (!admin && !token) {
     return <Navigate to="/admin" replace />;
   }
+
   return <>{children}</>;
 };
 

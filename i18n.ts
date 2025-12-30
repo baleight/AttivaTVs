@@ -39,12 +39,25 @@ const resources = {
       "select_plan": "Seleziona Durata",
       "email_optional": "Email (Opzionale per Ricevuta)",
       "pay_now": "Paga e Attiva",
+      "admin_login": "Accesso Admin",
+      "dashboard": "Dashboard",
+      "tvs": "TV",
+      "orders": "Ordini",
+      "rates": "Tariffe",
       "change_room": "Cambia Stanza",
+      "otp": "Codice di Accesso (OTP)",
+      "order_id": "ID Ordine",
       "move_time": "Sposta Tempo Rimanente",
-      "error_tv_not_found": "TV non trovata.",
-      "error_device_offline": "Dispositivo offline.",
+      "status_on": "ON",
+      "status_off": "OFF",
+      "days": "Giorni",
+      "price": "Prezzo",
+      "error_tv_not_found": "TV non trovata. Verifica il numero.",
+      "error_device_offline": "Dispositivo offline. Impossibile attivare.",
       "error_payment_failed": "Inizializzazione pagamento fallita.",
-      "error_network": "Errore di rete.",
+      "error_network": "Errore di rete. Server non raggiungibile.",
+      "error_invalid_data": "Dati non validi.",
+      "error_invalid_input": "Compila tutti i campi.",
     }
   },
   es: {
@@ -77,7 +90,7 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: "en",
+    lng: "it",
     fallbackLng: "en",
     interpolation: {
       escapeValue: false
